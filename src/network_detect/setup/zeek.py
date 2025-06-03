@@ -34,27 +34,33 @@ def get_path(process_name = "zeek"):
         "Could not find Zeek executable. Install Zeek and ensure `zeek` is on PATH"
     )
 
-def run(arg, out_dir):
-    parameters = [str(get_path()), arg.split()]
+def run(args, out_dir):
     try:
-        output = subprocess.run(parameters,
-                                cwd=out_dir,
-                                capture_output=True,
-                                text=True,
-                                check=True)
+        output = subprocess.run(args,
+                                    cwd=out_dir,
+                                    capture_output=True,
+                                    text=True,
+                                    check=True)
         return output
     except subprocess.CalledProcessError as e:
-        print("Zeek command could not be ran.")
-        print(e.output)
+        print(f"ERROR: Zeek command could not be ran")
+        print(e.stderr)
+    return None
 
 def generate_logs(pcap_path):
     now = datetime.now().strftime("%d%m%y_%H%M%S")
-    out = Config.RUN_DIR / now
+    out = Config.RUNS_DIR / now
     out.mkdir(parents=True, exist_ok=True)
     out = out.resolve()
 
-    cmd = f"-r {str(pcap_path)} LogAscii::use_json=T"
-    run(cmd, out)
+    args = [
+        str(get_path()),
+        "-b",
+        "-r",
+        str(pcap_path),
+        str(Config.SETUP_DIR / "filter.zeek")
+    ]
+    run(args, out)
 
 
 def process_pcap(pcap_path):
