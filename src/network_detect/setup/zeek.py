@@ -22,7 +22,7 @@ def get_path(process_name = "zeek"):
         Path("/usr/local/bin") / process_name,      # homebrew/manual installs
         Path("/usr/bin") / process_name,
         Path("/usr/sbin") / process_name,
-        Path("/opt/homebrew/bin") / process_name,   # Apple Silicon Homebrew
+        Path("/opt/homebrew/bin") / process_name,   # apple silicon Homebrew
         Path("/usr/local/sbin") / process_name,
     ]
 

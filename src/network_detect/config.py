@@ -12,4 +12,4 @@ class Config:
     SETUP_DIR = PROJECT_ROOT / "setup"
     
     # REVIEW delete this once file dialog done
-    PCAP_PATH = Path.home() / "network_detect" / "data" / "infected.pcap"
+    PCAP_PATH = Path.home() / "network_detect" / "data" / "botnet.pcap"
