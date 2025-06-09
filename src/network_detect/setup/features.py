@@ -28,7 +28,6 @@ def new_flow(uid):
         "id.resp_h": "",
         "id.orig_p": None,
         "id.resp_p": None,
-
         "orig_pkts": 0,
         "resp_pkts": 0,
         "orig_bytes": 0,
@@ -88,9 +87,30 @@ def new_flow(uid):
         "win_http_request_rate": 0.0,
     }
 
-def update_conn(flows_dict):
-    # just calculate the necessary features with functions and add to the feat obj
-    pass
+def update(run_id):
+    flows = {}
+    # conn
+    connPath = Config.RUNS_DIR / run_id / "conn.log"
+    for record in iter_json(connPath):
+        uid = record.get("uid")
+        if not uid:
+            continue
+        flows[uid] = new_flow(uid)
+        update_from_conn(flows["uid"], record)
+
+
+def update_from_conn(f, rec: dict):
+    f["proto"] = rec.get("proto") or ""
+    f["ts"] = rec.get("ts")
+    f["duration"] = float(rec.get("duration") or 0.0) # handles None or ""
+    f["orig_pkts"] = int(rec.get("orig_pkts") or 0)
+    f["resp_pkts"] = int(rec.get("resp_pkts") or 0)
+    f["orig_bytes"] = int(rec.get("orig_bytes") or 0)
+    f["resp_bytes"] = int(rec.get("resp_bytes") or 0)
+    f["id.orig_h"] = rec.get("id.orig_h") or ""
+    f["id.resp_h"] = rec.get("id.resp_h") or ""
+    f["id.orig_p"] = rec.get("id.orig_p") or ""
+    f["id.resp_p"] = rec.get("id.resp_p") or ""
 
 def update_lof(flows_dict):
     # need to iterate over each.log to get the basic __ features
