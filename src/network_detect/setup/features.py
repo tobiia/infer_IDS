@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 from config import Config
 import json
+import ipaddress
 
 def iter_json(path):
     with path.open("r", encoding="utf-8") as f:
@@ -35,6 +36,15 @@ def split_labels(domain):
     if not d:
         return []
     return [p for p in d.split(".") if p]
+
+def is_ip(s):
+    if not s:
+        return False
+    try:
+        ipaddress.ip_address(s)
+        return True
+    except ValueError:
+        return False
 
 def new_flow(uid):
     return {
@@ -116,7 +126,7 @@ def update_from_conn(flow, rec):
     flow["id.orig_p"] = rec.get("id.orig_p") or ""
     flow["id.resp_p"] = rec.get("id.resp_p") or ""
 
-def update_dns(flow: dict, rec, dns_events_by_host):
+def update_dns(flow, rec, dns_events_by_host):
     # f = flow uid, rec = specific record in log
     flow["dns_count"] = int(flow.get("dns_count") or 0) + 1
 
@@ -161,7 +171,15 @@ def update_dns(flow: dict, rec, dns_events_by_host):
         flow["dns_entropy_sum"] = float(flow.get("dns_entropy_sum") or 0.0) + ent
         flow["dns_entropy_max"] = max(float(flow.get("dns_entropy_max") or 0.0), ent)
 
-    # host-based events
+    # unique ips
+    answers = rec.get("answers") or []
+    ipset = flow.setdefault("dns_unique_ips", set())
+    for a in answers:
+        s = a.strip()
+        if is_ip(s):
+            ipset.add(s)
+
+    # host-based events --> might not be necessary for windows
     if host and ts is not None:
         dns_events_by_host[host].append({
             "ts": float(ts),
@@ -170,3 +188,14 @@ def update_dns(flow: dict, rec, dns_events_by_host):
             "query": query,
             "tld": tld_from_domain(query) if query else "",
         })
+
+
+def update_tls(flow, rec):
+    flow["tls_version"] = rec.get("version") or ""
+    flow["tls_cipher"] = rec.get("cipher") or ""
+    sni = (rec.get("server_name") or "").strip().lower()
+    flow["tls_server_name"] = sni
+    flow["tls_sni_present"] = 1 if sni else 0
+    flow["tls_sni_len"] = len(sni) if sni else 0
+    flow["tls_sni_tld"] = tld_from_domain(sni) if sni else ""
+    flow["tls_resumed"] = 1 if rec.get("resumed") else 0
