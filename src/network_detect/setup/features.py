@@ -53,20 +53,21 @@ def new_flow(uid):
         "orig_bytes": 0,
         "resp_bytes": 0,
 
-        # dns.log
-        "dns_query": "",
-        "dns_has_subdomain": 0,
-        "dns_tld": "",
-        "dns_domain_len": 0,
-        "dns_subdomain_len": 0,
-        "dns_num_pct": 0.0,
-        "dns_entropy": 0.0,
-        "dns_num_dots": 0,
-        "dns_num_hyphens": 0,
-        "dns_num_digits": 0,
-        "dns_qtype_counts": {},
+        # dns.log aggregates
         "dns_count": 0,
+        "dns_qtype_counts": {},
         "dns_rcode_counts": {},
+        "dns_unique_domains": set(),
+        "dns_unique_tlds": set(),
+        "dns_unique_ips": set(),
+        "dns_entropy_sum": 0.0,
+        "dns_entropy_max": 0.0,
+        "dns_len_sum": 0,
+        "dns_len_max": 0,
+        "dns_num_pct_sum": 0.0,
+        "dns_num_pct_max": 0.0,
+        "dns_has_subdomain_count": 0,
+
 
         # ssl.log
         "tls_version": "",
@@ -81,20 +82,6 @@ def new_flow(uid):
         "tls_ja3": "",
         "tls_ja4": "",
 
-        # http.log
-        "http_host": "",
-        "http_uri": "",
-        "http_user_agent": "",
-        "http_method": "",
-        "http_status_code": None,
-        "http_response_body_len": 0,
-        "http_resp_mime_types": [],
-        "http_uri_len": 0,
-        "http_query_len": 0,
-        "http_param_count": 0,
-        "http_exe_mime_flag": 0,
-        "http_script_mime_flag": 0,
-
         # window features (filled later)
         "win_dns_query_rate": 0.0,
         "win_dns_fail_rate": 0.0,
@@ -102,9 +89,6 @@ def new_flow(uid):
         "win_dns_txt_rate": 0.0,
         "win_dns_unique_domains": 0,
         "win_dns_unique_tlds": 0,
-
-        "win_http_error_rate": 0.0,
-        "win_http_request_rate": 0.0,
     }
 
 def update(run_id):
@@ -116,96 +100,73 @@ def update(run_id):
         if not uid:
             continue
         flows[uid] = new_flow(uid)
-        update_from_conn(flows["uid"], record)
+        update_from_conn(flows[uid], record)
 
 
-def update_from_conn(f, rec: dict):
-    f["proto"] = rec.get("proto") or ""
-    f["ts"] = rec.get("ts")
-    f["duration"] = float(rec.get("duration") or 0.0) # handles None or ""
-    f["orig_pkts"] = int(rec.get("orig_pkts") or 0)
-    f["resp_pkts"] = int(rec.get("resp_pkts") or 0)
-    f["orig_bytes"] = int(rec.get("orig_bytes") or 0)
-    f["resp_bytes"] = int(rec.get("resp_bytes") or 0)
-    f["id.orig_h"] = rec.get("id.orig_h") or ""
-    f["id.resp_h"] = rec.get("id.resp_h") or ""
-    f["id.orig_p"] = rec.get("id.orig_p") or ""
-    f["id.resp_p"] = rec.get("id.resp_p") or ""
+def update_from_conn(flow, rec):
+    flow["proto"] = rec.get("proto") or ""
+    flow["ts"] = rec.get("ts")
+    flow["duration"] = float(rec.get("duration") or 0.0) # handles None or ""
+    flow["orig_pkts"] = int(rec.get("orig_pkts") or 0)
+    flow["resp_pkts"] = int(rec.get("resp_pkts") or 0)
+    flow["orig_bytes"] = int(rec.get("orig_bytes") or 0)
+    flow["resp_bytes"] = int(rec.get("resp_bytes") or 0)
+    flow["id.orig_h"] = rec.get("id.orig_h") or ""
+    flow["id.resp_h"] = rec.get("id.resp_h") or ""
+    flow["id.orig_p"] = rec.get("id.orig_p") or ""
+    flow["id.resp_p"] = rec.get("id.resp_p") or ""
 
-def update_dns(f, rec, dns_events_by_host):
+def update_dns(flow: dict, rec, dns_events_by_host):
     # f = flow uid, rec = specific record in log
+    flow["dns_count"] = int(flow.get("dns_count") or 0) + 1
+
     ts = rec.get("ts")
-    host = rec.get("id.orig_h") or f.get("id.orig_h") or ""
+    host = rec.get("id.orig_h") or flow.get("id.orig_h") or ""
     query = (rec.get("query") or "").strip().lower()
     qtype = (rec.get("qtype_name") or "").upper()
     rcode = (rec.get("rcode_name") or "").upper()
-    ttl_values = rec.get("TTLs", [])
-    rtt = rec.get("rtt")
-    answers = rec.get("answers") or []
+    # ttl or rtt?
 
-    f["dns_count"] = f.get("dns_count", 0) + 1
-
-    # rcode count
-    rc = f.get("dns_rcode_counts")
-    if rc is None:
-        rc = {}
-        f["dns_rcode_counts"] = rc
-    if rcode:
-        rc[rcode] = rc.get(rcode, 0) + 1
-
-    # qtype count
-    qt = f.get("dns_qtype_counts")
-    if qt is None:
-        qt = {}
-        f["dns_qtype_counts"] = qt
+    # counts
+    qt = flow.setdefault("dns_qtype_counts", {})
     if qtype:
         qt[qtype] = qt.get(qtype, 0) + 1
 
-    # lexical
-    if query: # should always have
+    rc = flow.setdefault("dns_rcode_counts", {})
+    if rcode:
+        rc[rcode] = rc.get(rcode, 0) + 1
+
+    # uniques + lexical stats across queries (per UID)
+    if query:
+        flow.setdefault("dns_unique_domains", set()).add(query)
+        tld = tld_from_domain(query)
+        if tld:
+            flow.setdefault("dns_unique_tlds", set()).add(tld)
+
         labels = split_labels(query)
+        has_sub = 1 if len(labels) > 2 else 0
+        flow["dns_has_subdomain_count"] = int(flow.get("dns_has_subdomain_count") or 0) + has_sub
 
-        f["dns_query"] = query
-        f["dns_has_subdomain"] = 1 if len(labels) > 2 else 0
-        f["dns_tld"] = tld_from_domain(query)
-
-        f["dns_domain_len"] = len(query)
-
-        f["dns_num_dots"] = query.count(".")
-        f["dns_num_hyphens"] = query.count("-")
+        qlen = len(query)
         digits = sum(ch.isdigit() for ch in query)
-        f["dns_num_digits"] = digits
-        f["dns_num_pct"] = digits / max(len(query), 1)
+        num_pct = digits / max(qlen, 1)
+        ent = shannon_entropy(query)
 
-        f["dns_entropy"] = shannon_entropy(query)
+        flow["dns_len_sum"] = int(flow.get("dns_len_sum") or 0) + qlen
+        flow["dns_len_max"] = max(int(flow.get("dns_len_max") or 0), qlen)
 
-    # unique ips in answers
-    answers = rec.get("answers") or []
-    ans_set = f.get("dns_unique_ips")
-    if ans_set is None:
-        ans_set = set()
-        f["dns_unique_ips"] = ans_set
+        flow["dns_num_pct_sum"] = float(flow.get("dns_num_pct_sum") or 0.0) + num_pct
+        flow["dns_num_pct_max"] = max(float(flow.get("dns_num_pct_max") or 0.0), num_pct)
 
-    for a in answers:
-        a = (a or "").strip()
-        ans_set.add(a)
+        flow["dns_entropy_sum"] = float(flow.get("dns_entropy_sum") or 0.0) + ent
+        flow["dns_entropy_max"] = max(float(flow.get("dns_entropy_max") or 0.0), ent)
 
-    if ttl_values:
-        avg_ttl = sum(ttl_values) / len(ttl_values) if ttl_values else 0
-        
-        # Flag: Short TTLs (Fast Flux)
-        f["dns_has_short_ttl"] = int(any(t < 300 for t in ttl_values))  # < 5 min
-        
-        # Store TTL stats
-        f["dns_avg_ttl"] = avg_ttl
-
-        # Add event for window features (host-based)
+    # host-based events
     if host and ts is not None:
         dns_events_by_host[host].append({
             "ts": float(ts),
-            "uid": f.get("uid"),
-            "query": query,
-            "tld": tld_from_domain(query) if query else "",
             "rcode": rcode,
             "qtype": qtype,
+            "query": query,
+            "tld": tld_from_domain(query) if query else "",
         })
