@@ -1,6 +1,3 @@
-# parse the log files to get the features
-
-import os
 from pathlib import Path
 from config import Config
 import json
@@ -45,6 +42,13 @@ def is_ip(s):
         return True
     except ValueError:
         return False
+    
+def weak_cipher(cipher):
+    if not cipher:
+        return 0
+    c = cipher.upper()
+    return 1 if ("RC4" in c or "3DES" in c or "MD5" in c) else 0
+
 
 def new_flow(uid):
     return {
@@ -78,19 +82,22 @@ def new_flow(uid):
         "dns_num_pct_max": 0.0,
         "dns_has_subdomain_count": 0,
 
-
         # ssl.log
         "tls_version": "",
         "tls_cipher": "",
         "tls_server_name": "",
+        "tls_resumed": 0,
+        "tls_ja3": "",
+        "tls_ja3s": "",
+        "tls_ja4": "",
+        "tls_ja4s": "",
         "tls_sni_present": 0,
         "tls_sni_len": 0,
         "tls_sni_tld": "",
-        "tls_resumed": 0,
-        "tls_cipher_family": "",
         "tls_weak_cipher_flag": 0,
-        "tls_ja3": "",
-        "tls_ja4": "",
+        "tls_client_ext_count": 0,
+        "tls_server_ext_count": 0,
+        "tls_client_ext_normal_flag": 0,
 
         # window features (filled later)
         "win_dns_query_rate": 0.0,
@@ -192,10 +199,37 @@ def update_dns(flow, rec, dns_events_by_host):
 
 def update_tls(flow, rec):
     flow["tls_version"] = rec.get("version") or ""
-    flow["tls_cipher"] = rec.get("cipher") or ""
     sni = (rec.get("server_name") or "").strip().lower()
     flow["tls_server_name"] = sni
+    flow["tls_resumed"] = 1 if rec.get("resumed") else 0
+
     flow["tls_sni_present"] = 1 if sni else 0
     flow["tls_sni_len"] = len(sni) if sni else 0
     flow["tls_sni_tld"] = tld_from_domain(sni) if sni else ""
-    flow["tls_resumed"] = 1 if rec.get("resumed") else 0
+
+    cipher = rec.get("cipher") or ""
+    flow["tls_cipher"] = cipher
+    flow["tls_weak_cipher_flag"] = weak_cipher(cipher)
+
+    # fingerprints --> currently both available but check if both necessary
+    # client hello
+    flow["tls_ja3"] = rec.get("ja3") or flow.get("tls_ja3", "")
+    flow["tls_ja4"] = rec.get("ja4") or flow.get("tls_ja4", "")
+    # server hello
+    flow["tls_ja3s"] = rec.get("ja3s") or flow.get("tls_ja3s", "")
+    flow["tls_ja4s"] = rec.get("ja4s") or flow.get("tls_ja4s", "")
+
+    # non-malware tend to have diff exts whereas malicious only 1
+    # tls extension diversity
+    client_exts = rec.get("ssl_client_exts") or []
+    server_exts = rec.get("ssl_server_exts") or []
+
+    flow["tls_client_ext_count"] = len(client_exts)
+    flow["tls_server_ext_count"] = len(server_exts)
+
+    # status_request=5, supported_groups=16, NPN=13172, EMS=23
+    # most normal traffic uses above
+    normal_exts = {5, 16, 13172, 23}
+    cset = set(int(x) for x in client_exts if x is not None)
+    flow["tls_client_ext_normal_flag"] = 1 if (cset & normal_exts) else 0
+
