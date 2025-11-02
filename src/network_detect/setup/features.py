@@ -1,3 +1,4 @@
+from collections import defaultdict
 from pathlib import Path
 from config import Config
 import json
@@ -67,13 +68,14 @@ def new_flow(uid):
         "orig_bytes": 0,
         "resp_bytes": 0,
 
-        # dns.log aggregates
+        # DNS aggregates
         "dns_count": 0,
         "dns_qtype_counts": {},
         "dns_rcode_counts": {},
         "dns_unique_domains": set(),
         "dns_unique_tlds": set(),
         "dns_unique_ips": set(),
+
         "dns_entropy_sum": 0.0,
         "dns_entropy_max": 0.0,
         "dns_len_sum": 0,
@@ -82,42 +84,36 @@ def new_flow(uid):
         "dns_num_pct_max": 0.0,
         "dns_has_subdomain_count": 0,
 
-        # ssl.log
+        # DNS derived
+        "dns_entropy_mean": 0.0,
+        "dns_len_mean": 0.0,
+        "dns_num_pct_mean": 0.0,
+        "dns_subdomain_rate": 0.0,
+        "dns_unique_domains_count": 0,
+        "dns_unique_tlds_count": 0,
+        "dns_unique_ips_count": 0,
+
+        # TLS features
         "tls_version": "",
         "tls_cipher": "",
-        "tls_server_name": "",
         "tls_resumed": 0,
+        "tls_weak_cipher_flag": 0,
+
+        "tls_server_name": "",
+        "tls_sni_present": 0,
+        "tls_sni_len": 0,
+        "tls_sni_tld": "",
+
+        "tls_client_ext_count": 0,
+        "tls_server_ext_count": 0,
+        "tls_client_ext_enterprise_flag": 0,
+
+        # fingerprints
         "tls_ja3": "",
         "tls_ja3s": "",
         "tls_ja4": "",
         "tls_ja4s": "",
-        "tls_sni_present": 0,
-        "tls_sni_len": 0,
-        "tls_sni_tld": "",
-        "tls_weak_cipher_flag": 0,
-        "tls_client_ext_count": 0,
-        "tls_server_ext_count": 0,
-        "tls_client_ext_normal_flag": 0,
-
-        # window features (filled later)
-        "win_dns_query_rate": 0.0,
-        "win_dns_fail_rate": 0.0,
-        "win_dns_ptr_rate": 0.0,
-        "win_dns_txt_rate": 0.0,
-        "win_dns_unique_domains": 0,
-        "win_dns_unique_tlds": 0,
     }
-
-def update(run_id):
-    flows = {}
-    # conn
-    connPath = Config.RUNS_DIR / run_id / "conn.log"
-    for record in iter_json(connPath):
-        uid = record.get("uid")
-        if not uid:
-            continue
-        flows[uid] = new_flow(uid)
-        update_from_conn(flows[uid], record)
 
 
 def update_from_conn(flow, rec):
@@ -233,3 +229,45 @@ def update_tls(flow, rec):
     cset = set(int(x) for x in client_exts if x is not None)
     flow["tls_client_ext_normal_flag"] = 1 if (cset & normal_exts) else 0
 
+
+def parse_run(run_id):
+    flows = {}
+    dns_events_by_host = defaultdict(list)
+
+    # conn
+    conn_path = Config.RUNS_DIR / run_id / "conn.log"
+    for rec in iter_json(conn_path):
+        uid = rec.get("uid")
+        if not uid:
+            continue
+        f = flows.get(uid)
+        if f is None:
+            f = new_flow(uid)
+            flows[uid] = f
+        update_from_conn(f, rec)
+
+    # dns
+    dns_path = Config.RUNS_DIR / run_id / "dns.log"
+    if dns_path.exists():
+        for rec in iter_json(dns_path):
+            uid = rec.get("uid")
+            if not uid:
+                continue
+            f = flows.get(uid)
+            if f is None:
+                continue
+            update_dns(f, rec, dns_events_by_host)
+
+    # tls
+    ssl_path = Config.RUNS_DIR / run_id / "ssl.log"
+    if ssl_path.exists():
+        for rec in iter_json(ssl_path):
+            uid = rec.get("uid")
+            if not uid:
+                continue
+            f = flows.get(uid)
+            if f is None:
+                continue
+            update_tls(f, rec)
+
+    return flows, dns_events_by_host
