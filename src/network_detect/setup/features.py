@@ -4,6 +4,8 @@ from config import Config
 import json
 import ipaddress
 
+EPS = 1e-9
+
 def iter_json(path):
     with path.open("r", encoding="utf-8") as f:
         for line in f:
@@ -55,7 +57,7 @@ def new_flow(uid):
     return {
         "uid": uid,
 
-        # base conn
+        # base conn/flow
         "ts": None,
         "duration": 0.0,
         "proto": "",
@@ -67,6 +69,13 @@ def new_flow(uid):
         "resp_pkts": 0,
         "orig_bytes": 0,
         "resp_bytes": 0,
+
+        # derived flow
+        "approx_fwd_pkt_len_mean": 0.0,
+        "approx_bwd_pkt_len_mean": 0.0,
+        "flow_bytes_per_sec": 0.0,
+        "pkts_per_sec": 0.0,
+        "pkt_ratio": 0.0,
 
         # DNS aggregates
         "dns_count": 0,
@@ -119,15 +128,22 @@ def new_flow(uid):
 def update_from_conn(flow, rec):
     flow["proto"] = rec.get("proto") or ""
     flow["ts"] = rec.get("ts")
-    flow["duration"] = float(rec.get("duration") or 0.0) # handles None or ""
+    flow["id.orig_h"] = rec.get("id.orig_h") or "" # handles None or ""
+    flow["id.resp_h"] = rec.get("id.resp_h") or ""
+    flow["id.orig_p"] = rec.get("id.orig_p") or ""
+    flow["id.resp_p"] = rec.get("id.resp_p") or ""
+
+    duration = float(rec.get("duration") or 0.0)
+    orig_pkts = int(rec.get("orig_pkts") or 0)
+    resp_pkts = int(rec.get("resp_pkts") or 0)
+    orig_bytes = int(rec.get("orig_bytes") or 0)
+    resp_bytes = int(rec.get("resp_bytes") or 0)
+
+    flow["duration"] = duration
     flow["orig_pkts"] = int(rec.get("orig_pkts") or 0)
     flow["resp_pkts"] = int(rec.get("resp_pkts") or 0)
     flow["orig_bytes"] = int(rec.get("orig_bytes") or 0)
     flow["resp_bytes"] = int(rec.get("resp_bytes") or 0)
-    flow["id.orig_h"] = rec.get("id.orig_h") or ""
-    flow["id.resp_h"] = rec.get("id.resp_h") or ""
-    flow["id.orig_p"] = rec.get("id.orig_p") or ""
-    flow["id.resp_p"] = rec.get("id.resp_p") or ""
 
 def update_dns(flow, rec, dns_events_by_host):
     # f = flow uid, rec = specific record in log
