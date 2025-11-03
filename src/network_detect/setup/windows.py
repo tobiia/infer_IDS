@@ -6,55 +6,7 @@ from bisect import bisect_left, bisect_right
 
 FAIL_RCODES = {"NXDOMAIN", "SERVFAIL", "REFUSED", "FORMERR"}
 
-
-def event_time_idx(events_by_host):
-    # idx_events_by_host = dict[host: list of events associated]
-    index = {}
-    for host, events in events_by_host.items():
-        events_sorted = sorted(events, key=lambda e: e["ts"])
-        ts_list = [e["ts"] for e in events_sorted]
-        index[host] = (ts_list, events_sorted)
-    return index
-
-def dns_window_feat(flow, host_index, window_s = 300):
-    host = flow.get("id.orig_h") or ""
-    ts = flow.get("ts")
-    if not host or ts is None:
-        return
-
-    if host not in host_index:
-        return
-
-    ts_list, evs = host_index[host]
-
-    t1 = float(ts)
-    t0 = t1 - float(window_s)
-
-    # bisect to get indices for [t0, t1]
-    lo = bisect_left(ts_list, t0)
-    hi = bisect_right(ts_list, t1)
-    win = evs[lo:hi]
-
-    n = len(win)
-    if n == 0:
-        return
-
-    flow["win_dns_query_rate"] = n / max(window_s, 1e-9)
-
-    fail = sum(1 for e in win if e.get("rcode") in FAIL_RCODES)
-    flow["win_dns_fail_rate"] = fail / n
-
-    ptr = sum(1 for e in win if e.get("qtype") == "PTR")
-    txt = sum(1 for e in win if e.get("qtype") == "TXT")
-    flow["win_dns_ptr_rate"] = ptr / n
-    flow["win_dns_txt_rate"] = txt / n
-
-    domains = {e["query"] for e in win if e.get("query")}
-    tlds = {e["tld"] for e in win if e.get("tld")}
-    flow["win_dns_unique_domains"] = len(domains)
-    flow["win_dns_unique_tlds"] = len(tlds)
-
-def create_windows(flows):
+def create_windows(flows: dict[str, dict]):
     rows = []
 
     # flows = dict where keys are uid, values are a dict of the features
@@ -76,6 +28,11 @@ def create_windows(flows):
             features["dns_entropy_mean"] = float(features.get("dns_entropy_sum") or 0.0) / dns_n
             features["dns_len_mean"] = float(features.get("dns_len_sum") or 0) / dns_n
             features["dns_num_pct_mean"] = float(features.get("dns_num_pct_sum") or 0.0) / dns_n
+
+            if features.get("dns_entropy_sum"): del features["dns_entropy_sum"]
+            if features.get("dns_len_sum"): del features["dns_len_sum"]
+            if features.get("dns_num_pct_sum"): del features["dns_num_pct_sum"]
+            if features.get("dns_has_subdomain_count"): del features["dns_has_subdomain_count"]
         else:
             features["dns_entropy_mean"] = None
             features["dns_entropy_max"] = None
@@ -92,10 +49,6 @@ def create_windows(flows):
         del features["dns_unique_domains"]
         del features["dns_unique_tlds"]
         del features["dns_unique_ips"]
-        del features["dns_entropy_sum"]
-        del features["dns_len_sum"]
-        del features["dns_num_pct_sum"]
-        del features["dns_has_subdomain_count"]
 
         rows.append(features)
 
