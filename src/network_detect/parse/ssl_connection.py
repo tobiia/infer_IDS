@@ -1,11 +1,11 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List
-from connection import Connection
+from uuid import uuid4
+from .connect import Connection
 from utils import weak_cipher
 
 @dataclass
 class SSLConnection(Connection):
-    
     version: str = ""
     cipher: str = ""
     server_name: str = ""
@@ -14,12 +14,12 @@ class SSLConnection(Connection):
     ssl_history: str = ""
     ja4: str = ""
     ja4s: str = ""
-    cert_chain_fps: List[str] = []
+    cert_chain_fps: List[str] = field(default_factory=list)
     
     # weak = RC4, 3DES / DES / RC2 / IDEA, TLS_RSA
-    client_ciphers: List[str] = []
-    ssl_client_exts: List[str] = []
-    ssl_server_exts: List[str] = []
+    client_ciphers: List[str] = field(default_factory=list)
+    ssl_client_exts: List[str] = field(default_factory=list)
+    ssl_server_exts: List[str] = field(default_factory=list)
     
     # counts
     num_cli_exts: int = 0
@@ -40,6 +40,7 @@ class SSLConnection(Connection):
     def _from_con(cls, conn: Connection, record: dict):
 
         ssl_conn = cls(
+            uuid = str(uuid4()),
             uid=conn.uid,
             ts=conn.ts,
             ts_iso=conn.ts_iso,
@@ -53,6 +54,7 @@ class SSLConnection(Connection):
             resp_pkts = conn.resp_pkts,
             orig_bytes = conn.orig_bytes,
             resp_bytes = conn.resp_bytes,
+            missed_bytes = conn.missed_bytes,
             service = conn.service,
             has_dns = 0,
             has_tls = 1,
@@ -76,7 +78,7 @@ class SSLConnection(Connection):
         ssl_conn.total_bytes = conn.total_bytes
         ssl_conn.total_pkts = conn.total_pkts
         ssl_conn.approx_fwd_pkt_len_mean = conn.approx_fwd_pkt_len_mean
-        ssl_conn.flow_bytes_per_sec = conn.approx_fwd_pkt_len_mean
+        ssl_conn.flow_bytes_per_sec = conn.flow_bytes_per_sec
         ssl_conn.pkts_per_sec = conn.pkts_per_sec
         ssl_conn.pkt_ratio = conn.pkt_ratio
         ssl_conn.approx_bwd_pkt_len_mean = conn.approx_bwd_pkt_len_mean

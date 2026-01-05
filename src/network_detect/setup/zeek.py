@@ -4,10 +4,11 @@ import shutil
 import subprocess
 from datetime import datetime
 from pathlib import Path
+from typing import List
 from config import Config
 
 
-def get_path(process_name = "zeek"):
+def get_path(process_name: str = "zeek") -> Path:
     if sys.platform.startswith("win"):
         raise RuntimeError("This resolver is for Linux/macOS only. Use WSL for Zeek on Windows.")
 
@@ -34,7 +35,7 @@ def get_path(process_name = "zeek"):
         "Could not find Zeek executable. Install Zeek and ensure `zeek` is on PATH"
     )
 
-def run(args, out_dir:Path):
+def run(args: List[str], out_dir: Path) -> str:
     try:
         output = subprocess.run(args,
                                     cwd=out_dir,
@@ -45,9 +46,9 @@ def run(args, out_dir:Path):
     except subprocess.CalledProcessError as e:
         print(f"ERROR: Zeek command could not be ran")
         print(e.stderr)
-    return None
+    return ""
 
-def generate_logs(pcap_path):
+def generate_logs(pcap_path: Path) -> str:
     now = datetime.now().strftime("%d%m%y_%H%M%S")
     out = Config.RUNS_DIR / now
     out.mkdir(parents=True, exist_ok=True)
@@ -63,5 +64,5 @@ def generate_logs(pcap_path):
     return run(args, out)
 
 
-def process_pcap(pcap_path):
+def process_pcap(pcap_path: Path) -> str:
     return generate_logs(pcap_path)

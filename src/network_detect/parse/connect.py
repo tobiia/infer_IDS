@@ -1,11 +1,13 @@
 from dataclasses import dataclass
 from datetime import datetime
+from uuid import uuid4
 
 @dataclass
 class Connection:
-    uid: str
-    ts: float
-    ts_iso: str
+    uuid: str = ""
+    uid: str = ""
+    ts: float = 0
+    ts_iso: str = ""
     duration: float = 0.0
     proto: str = ""
     orig_h: str = ""
@@ -16,6 +18,7 @@ class Connection:
     resp_pkts: int = 0
     orig_bytes: int = 0
     resp_bytes: int = 0
+    missed_bytes: int = 0
     service: str = ""
     has_dns: int = 0
     has_tls: int = 0
@@ -54,6 +57,7 @@ class Connection:
             ts_iso = datetime.fromtimestamp(ts).isoformat()
             
             conn = Connection(
+                uuid = "",
                 uid = record.get("uid", ""),
                 ts = ts,
                 ts_iso = ts_iso,
@@ -67,6 +71,7 @@ class Connection:
                 resp_pkts = record.get("resp_pkts", 0),
                 orig_bytes = record.get("orig_bytes", 0),
                 resp_bytes = record.get("resp_bytes", 0),
+                missed_bytes = record.get("missed_bytes", 0),
                 service = record.get("service", ""),
                 has_dns = 0,
                 has_tls = 0,

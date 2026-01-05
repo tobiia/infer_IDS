@@ -1,6 +1,7 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List
-from connection import Connection
+from uuid import uuid4
+from .connect import Connection
 from utils import shannon_entropy, tld, subdomain_labels, consecutive_consonant_ratio, letter_digit_alternation_ratio, consecutive_digits_ratio
 
 @dataclass
@@ -9,8 +10,8 @@ class DNSConnection(Connection):
     qclass: int = 1     # default: in
     qtype: int = 1      # A
     rcode: int = 0      # NOERROR
-    answers: List[str] = []
-    ttls: List[float] = []
+    answers: List[str] = field(default_factory=list)
+    ttls: List[float] = field(default_factory=list)
     rejected: int = 0
     
     # query features
@@ -48,7 +49,8 @@ class DNSConnection(Connection):
                 
                 subdomains_str = "".join(subdomain_list)
 
-                self.q_dig_ratio = sum(1 for c in subdomains_str if c.isdigit()) / sum(1 for c in subdomains_str if c.isalpha())
+                if any(c.isalpha() for c in subdomains_str):
+                    self.q_dig_ratio = sum(1 for c in subdomains_str if c.isdigit()) / sum(1 for c in subdomains_str if c.isalpha())
                 
                 self.q_entropy = shannon_entropy(subdomains_str)
                 self.q_consec_conso_ratio = consecutive_consonant_ratio(subdomains_str)
@@ -56,20 +58,22 @@ class DNSConnection(Connection):
                 self.q_conse_digits_ratio = consecutive_digits_ratio(subdomains_str)
         
         # snswer features
-        self.ans_len_mean = sum(len(ans) for ans in self.answers) / len(self.answers)
+        if self.answers:
+            self.ans_len_mean = sum(len(ans) for ans in self.answers) / len(self.answers)
 
-        entropies = [shannon_entropy(answers) for answers in self.answers]
-        self.ans_entropy_mean = sum(x for x in entropies) / len(entropies)
-        
-        self.ttl_mean = sum(self.ttls) / len(self.ttls)
+            entropies = [shannon_entropy(answers) for answers in self.answers]
+            self.ans_entropy_mean = sum(x for x in entropies) / len(entropies)
+        if self.ttls:
+            self.ttl_mean = sum(self.ttls) / len(self.ttls)
 
     @classmethod
     def _from_conn(cls, conn: Connection, record: dict):
         dns_conn = cls(
-            uid=conn.uid,
-            ts=conn.ts,
-            ts_iso=conn.ts_iso,
-            duration=conn.duration,
+            uuid = str(uuid4()),
+            uid = conn.uid,
+            ts = conn.ts,
+            ts_iso = conn.ts_iso,
+            duration = conn.duration,
             proto = conn.proto,
             orig_h = conn.orig_h,
             resp_h = conn.resp_h,
@@ -79,6 +83,7 @@ class DNSConnection(Connection):
             resp_pkts = conn.resp_pkts,
             orig_bytes = conn.orig_bytes,
             resp_bytes = conn.resp_bytes,
+            missed_bytes = conn.missed_bytes,
             service = conn.service,
             has_dns = 1,
             has_tls = 0,
@@ -97,7 +102,7 @@ class DNSConnection(Connection):
         dns_conn.total_bytes = conn.total_bytes
         dns_conn.total_pkts = conn.total_pkts
         dns_conn.approx_fwd_pkt_len_mean = conn.approx_fwd_pkt_len_mean
-        dns_conn.flow_bytes_per_sec = conn.approx_fwd_pkt_len_mean
+        dns_conn.flow_bytes_per_sec = conn.flow_bytes_per_sec
         dns_conn.pkts_per_sec = conn.pkts_per_sec
         dns_conn.pkt_ratio = conn.pkt_ratio
         dns_conn.approx_bwd_pkt_len_mean = conn.approx_bwd_pkt_len_mean
