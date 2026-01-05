@@ -5,5 +5,5 @@ venv
 .venv
 *.log
 __pycache__
-runs/280126_030631
+runs
 *.json
