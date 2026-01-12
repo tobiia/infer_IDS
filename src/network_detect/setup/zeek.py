@@ -44,7 +44,7 @@ def run(args: List[str], out_dir: Path) -> Path | None:
                                     check=True)
         return out_dir
     except subprocess.CalledProcessError as e:
-        print(f"ERROR: Zeek command could not be ran")
+        print(f"Zeek command could not be ran")
         print(e.stderr)
     return None
 

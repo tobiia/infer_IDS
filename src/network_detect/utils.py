@@ -14,9 +14,9 @@ def iter_log(filepath: Path):
         if record is not None and isinstance(record, Dict):
             yield dict(record)
         else:
-            raise ValueError("Error: log iterator encountered a non-Dict object")
+            raise ValueError("log iterator encountered a non-Dict object")
 
-def shannon_entropy(s):
+def shannon_entropy(s: str):
     if not s:
         return 0.0
     from math import log2
@@ -26,12 +26,12 @@ def shannon_entropy(s):
     n = len(s)
     return -sum((c/n) * log2(c/n) for c in counts.values())
 
-def tld(domain):
+def tld(domain: str):
     if not domain or "." not in domain:
         return ""
     return domain.rsplit(".", 1)[-1].lower()
 
-def subdomain_labels(domain):
+def subdomain_labels(domain: str):
     # not including tld
     if not domain:
         return []
@@ -41,7 +41,7 @@ def subdomain_labels(domain):
     parts = [p for p in d.split(".") if p]
     return parts[:-1]
 
-def consecutive_digits_ratio(domain):
+def consecutive_digits_ratio(domain: str):
     s = re.sub(r'[^a-z0-9]', '', domain.lower())
     if not s:
         return 0.0
@@ -52,7 +52,7 @@ def consecutive_digits_ratio(domain):
 
     return consecutive_digit_chars / len(s)
 
-def letter_digit_alternation_ratio(domain):
+def letter_digit_alternation_ratio(domain: str):
     s = re.sub(r'[^a-z0-9]', '', domain.lower())
     if len(s) < 2:
         return 0.0
@@ -65,7 +65,7 @@ def letter_digit_alternation_ratio(domain):
 
     return transitions / (len(s) - 1)
 
-def consecutive_consonant_ratio(domain):
+def consecutive_consonant_ratio(domain: str):
     s = re.sub(r'[^a-z]', '', domain.lower())
     if not s:
         return 0.0
@@ -87,7 +87,7 @@ def consecutive_consonant_ratio(domain):
 
     return consecutive_cons_chars / len(s)
 
-def weak_cipher(cipher):
+def weak_cipher(cipher: str):
     if not cipher:
         return 0
     c = cipher.upper()

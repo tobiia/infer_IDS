@@ -4,7 +4,7 @@
 from json import loads, dumps
 from collections import OrderedDict
 
-
+# https://github.com/dgunter/ParseZeekLogs
 class ParseZeekLogs(object):
     """Class that parses Zeek logs and allows log data to be output in CSV or json format.
 
