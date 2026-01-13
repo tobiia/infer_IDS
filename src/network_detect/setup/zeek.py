@@ -7,6 +7,7 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 from config import Config
+from shutil import rmtree
 
 
 def get_path(process_name: str = "zeek") -> Path:
@@ -49,7 +50,7 @@ def run(args: list[str], out_dir: Path) -> Path:
         raise e
 
 @contextmanager # --> can use func as a "with" stmt
-# finally clause ensures resource cleanup even with an exception
+# finally clause ensures temp file deletion even with an exception
 def process_file(pcap_path: Path):
     try:
         name = pcap_path.stem
@@ -65,6 +66,28 @@ def process_file(pcap_path: Path):
         ]
         
         yield run(args, out_dir)
+    except Exception as e:
+        print(f"Error processing {pcap_path.name}: {e}")
+        raise e
     finally:
-        import shutil
-        shutil.rmtree(temp_dir, ignore_errors=True)
+        if temp_dir and Path(temp_dir).exists():
+            rmtree(temp_dir, ignore_errors=True)
+
+# @contextmanager
+# def process_file(pcap_path: Path):
+#     try:
+#         now = datetime.now().strftime("%d%m%y_%H%M%S")
+#         out_dir = Config.RUNS_DIR / now
+#         out_dir.mkdir(parents=True, exist_ok=True)
+#         out_dir = out_dir.resolve()
+
+#         args = [
+#             str(get_path()),
+#             "-b",
+#             "-r",
+#             str(pcap_path),
+#             str(Config.SETUP_DIR / "filter.zeek")
+#         ]
+#         yield run(args, out_dir)
+#     finally:
+#         print("done!")

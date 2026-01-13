@@ -4,7 +4,9 @@
 from json import loads, dumps
 from collections import OrderedDict
 
-# https://github.com/dgunter/ParseZeekLogs
+# FROM: https://github.com/dgunter/ParseZeekLogs
+# I attempted to fix numerous issues in this library. This mainly had to do with brittle and incorrect data type conversion, as well as data formatting issues. I also added parsing logs as dictionary functionality. The library now works without error but is not organized well. I will clean it and submit a pull request at a later time.
+
 class ParseZeekLogs(object):
     """Class that parses Zeek logs and allows log data to be output in CSV or json format.
 
@@ -63,9 +65,14 @@ class ParseZeekLogs(object):
             # Match types with each other
             self.data_types[self.fields[i]] = self.types[i]
 
+        # REVIEW - set empty indicators once
+        empty_vals = self.options.get("empty_field", ["(empty)"])
+        unset_vals = self.options.get("unset_field", ["-"])
+        self.empty_indicators = set([x.strip() for x in empty_vals + unset_vals])
+
     # FIXME raising a silent exception despite fd being instantiated in init??
-    def __del__(self):
-        self.fd.close()
+    # def __del__(self):
+    #     self.fd.close()
 
     # REVIEW this is a temp fix
     def __del__(self):
@@ -149,67 +156,76 @@ class ParseZeekLogs(object):
 
         return retVal
     
+    def is_empty(self, v):
+        if v is None:
+            return True
+        if isinstance(v, str):
+            s = v.strip()
+            return s == "" or s in self.empty_indicators
+        return False
+
     # REVIEW --> moved this outside
     def del_empty_values(self, data):
-        empty_vals = self.options.get("empty_field", ["(empty)"])
-        unset_vals = self.options.get("unset_field", ["-"])
-        empty_indicators = set(empty_vals + unset_vals)
-
         keys_to_delete = []
         for k, v in data.items():
-            if isinstance(v, str):
-                if v in empty_indicators or v == "":
-                    keys_to_delete.append(k)
-            elif v is None:
+            if self.is_empty(v) or (isinstance(v, (list, dict)) and not v):
                 keys_to_delete.append(k)
-            elif isinstance(v, (list, dict)) and not v:
-                keys_to_delete.append(k)
-
         for k in keys_to_delete:
             del data[k]
-
         return data
 
+
     def convert_values(self, data, ignore_keys=[], data_types={}):
-        # FIXME --> shouldn't delete empty values for csv file output, only json + dict
         keys_to_delete = []
         for k, v in data.items():
             # print("evaluating k: " + str(k) + " v: " + str(v))
 
             if isinstance(v, dict):
-                data[k] = self.convert_values(v)
-            else:
-                if data_types.get(k) is not None:
-                    if (data_types.get(k) == "port" or data_types.get(k) == "count"):
-                        if v != "":
-                            data[k] = int(v)
-                        else:
-                            keys_to_delete.append(k)
-                    elif (data_types.get(k) == "double" or data_types.get(k) == "interval" or data_types.get(k) == "time"):
-                        if v != "":
-                            data[k] = float(v)
-                        else:
-                            keys_to_delete.append(k)
-                    elif data_types.get(k) == "bool":
-                        # REVIEW --> now returns a bool based on the val instead of always true
-                        # data[k] = bool(v)
-                        data[k] = str(v).lower() == 't'
-                    # REVIEW --> added list conversion
-                    elif data_types.get(k).startswith("vector"):
-                        if v == "":
-                            data[k] = []
-                        else:
-                            data_type = data_types.get(k)
-                            items = str(v).split(",")
-                            
-                            if data_type == "vector[string]":
-                                data[k] = [item.strip() for item in items]
-                            elif data_type == "vector[interval]":
-                                data[k] = [float(item.strip()) for item in items]
-                            elif data_type == "vector[count]":
-                                data[k] = [int(item.strip()) for item in items]
+                data[k] = self.convert_values(v, ignore_keys, data_types)
+                continue
+
+            if k in ignore_keys:
+                continue
+
+            # in case whitespace is causing issues with is_empty()
+            if isinstance(v, str):
+                v = v.strip()
+
+            # must handle empty/missing vals before casting to correct dtypes
+            if self.is_empty(v):
+                keys_to_delete.append(k)
+                continue
+
+            data_type = data_types.get(k)
+            if data_type is None:
+                data[k] = v
+                continue
+            
+            try:
+                if data_type in ("port","count"):
+                    data[k] = int(v)
+                elif data_type in ("double", "interval", "time"):
+                    data[k] = float(v)
+                elif data_type == "bool":
+                    # REVIEW --> now returns a bool based on the val instead of always true
+                    # data[k] = bool(v)
+                    data[k] = str(v).lower() == 't'
+                # REVIEW --> added list conversion
+                elif data_type.startswith("vector"):
+                    items = [item.strip() for item in str(v).split(",")] if str(v) else []
+                    items = [item for item in items if item != ""]
+                    if data_type == "vector[string]":
+                        data[k] = items
+                    elif data_type == "vector[interval]":
+                        data[k] = [float(item) for item in items if not self.is_empty(item)]
+                    elif data_type == "vector[count]":
+                        data[k] = [int(item) for item in items if not self.is_empty(item)]
                     else:
-                        data[k] = v
+                        data[k] = items
+                else:
+                    data[k] = v
+            except (ValueError, TypeError):
+                keys_to_delete.append(k)
 
         for k in keys_to_delete:
             del data[k]
