@@ -1,43 +1,57 @@
-# Infer-IDS - Malicious Network Traffic Detection
+# Infer_IDS - Malicious Network Traffic Detection
 
 Infer-IDS is a machine learning-based system for identifying malicious DNS and TLS network traffic. It analyzes network flows captured in PCAP format, extracts behavioral features, and uses trained XGBoost classifiers to detect potential threats with high recall performance.
+
+## Features
+- PCAP Processing: Convert network packet captures to structured logs using Zeek
+- Behavioral Feature Extraction: Extract 50+ features from DNS and TLS network flows
+- Machine Learning Detection: XGBoost classifiers with >97% recall for malicious traffic
+- Interactive Web Interface: Streamlit-based GUI for easy file upload and analysis
+- Real-time Analysis: Process and classify network traffic in real-time
+- Comprehensive Logging: Detailed audit trails and prediction logging
 
 ## Installation
 
 Linux/macOS:
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/network_detect.git
-cd network_detect
+git clone https://github.com/tobiia/infer_IDS.git
+cd infer_ids
 
 # Create and activate a virtual environment
 python3 -m venv .venv
 source .venv/bin/activate
 
 # Upgrade pip and install dependencies
-pip install --upgrade pip
-pip install -r requirements.txt
+pip3 install --upgrade pip
+pip3 install -r requirements.txt
 
-# Install Zeek (required for PCAP processing)
-# macOS: brew install zeek
-# Linux: Follow instructions at https://zeek.org/download/
+# Install Zeek
+# Ubuntu/Debian:
+sudo apt-get install zeek
+
+# macOS:
+brew install zeek
+
+# For other systems, see: https://zeek.org/download/
 ```
 
-## Usage
+## Web Interface
 
 ```bash
-# Process a PCAP file and generate network logs
-python src/network_detect/main.py
+# navigate to the project root and run:
+cd src/infer_ids
+streamlit run app.py
+```
 
-# Run Jupyter analysis notebook
-jupyter notebook src/network_detect/model/analysis.ipynb
-
-# Generate datasets from labeled network logs
-python src/network_detect/model/create_datasets.py
+## Command Line Interface
+```bash
+cd src/infer_ids
+python3 cli.py
 ```
 
 ## Dependencies
-- Zeek (network analysis framework)
+- Zeek
 - Python 3.10+
 - pip
 - pandas
@@ -47,7 +61,12 @@ python src/network_detect/model/create_datasets.py
 - matplotlib
 - seaborn
 - jupyter
+- ipykernel
+- typer
 - joblib
+- rich
+- streamlit
+- streamlit_file_browser
 
 ## Workflow
 
@@ -134,8 +153,8 @@ The system extracts behavioral features from network flows:
 
 The system achieves high recall on both DNS and TLS traffic:
 
-- DNS Model: Recall > 99%, Precision > 94%
-- TLS Model: Recall > 99%, Precision > 94%
+- DNS Model: Recall > 96%
+- TLS Model: Recall > 99%
 
 Thresholds are optimized to minimize false negatives (prioritizing recall) as malicious traffic detection requires high sensitivity.
 
@@ -158,45 +177,6 @@ To add new features to connection objects:
 2. Implement calculation logic in the `_calculate_*_features()` method
 3. Add extraction logic in parse_log.py's `to_dataframe()` method
 4. Include in model training pipeline in analysis.ipynb
-
-## Project Structure
-
-```
-src/network_detect/
-├── __init__.py              # Package initialization
-├── config.py                # Configuration and paths
-├── main.py                  # Application entry point
-├── utils.py                 # Utility functions for feature extraction
-│
-├── parse/                   # Network flow parsing
-│   ├── __init__.py
-│   ├── base_connection.py   # Base Connection dataclass
-│   ├── dns_connection.py    # DNS-specific features and fields
-│   ├── tls_connection.py    # TLS-specific features and fields
-│   └── parse_log.py         # Zeek log parsing and DataFrame conversion
-│
-├── model/                   # Machine learning models and datasets
-│   ├── analysis.ipynb       # Jupyter notebook with training pipeline
-│   ├── create_datasets.py   # Dataset creation and preprocessing
-│   └── datasets/            # Training and test datasets
-│       ├── dns/
-│       │   ├── normal/
-│       │   └── malicious/
-│       └── ssl/
-│           ├── normal/
-│           └── malicious/
-│
-├── setup/                   # Zeek integration and configuration
-│   ├── zeek.py              # Zeek process execution
-│   ├── zeek_parser.py       # Zeek log file parser
-│   └── filter.zeek          # Zeek script for filtering and logging
-│
-├── tables/                  # Database operations
-│   └── sql.py               # SQLite database schema and operations
-│
-├── gui/                     # User interface (future)
-└── runs/                    # Generated Zeek logs directory
-```
 
 ## Security Considerations
 

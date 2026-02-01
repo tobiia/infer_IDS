@@ -11,4 +11,4 @@ class Config:
     
     # REVIEW delete this once file dialog done
     # figure out alternative to tkinter b/c it's not a package nor default on linux
-    PCAP_PATH = Path.home() / "network_detect" / "data" / "infected.pcap"
+    PCAP_PATH = Path.home() / "infer_ids" / "data" / "infected.pcap"
